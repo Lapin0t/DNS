@@ -1,26 +1,81 @@
+=====================
 A Better Name Service
 =====================
 
 
 This is a draft describing a system for a name service with distributed trust.
-It is inspired by the pgp web-of-trust, keybase_, the petname_ system and
-possibly some other projects.
+It is inspired by classical DNS, the pgp web-of-trust, keybase_, the petname_
+system and possibly some other projects.
+
+The goal here is to replace the current DNS system used to attribute global
+names to computers on the internet, but doing it in a cryptographically
+authentificated way it will also replace the current hierarchical SSL PKI and
+will provide some basis to build an name system not only for computers but also
+for humans. It does not seek to be compatible with anything, but care is taken
+to allow it to exist alongside current systems (it can also obviously exist by
+itself) and transition smoothly: external identity system (computer-based or
+IRL) are a first-class concept.
 
 
 Concepts
---------
+========
 
-Each entity participating in the system will be identified by his master-key
-(we will also call the entity an *account*). Each entity has an associated
-linked list of blocks, each one containing an action on the account, the hash
-of the preceding block and is signed by the account's master key. Following the 
+The main idea is to create a distributed PKI (like the PGP WoT or keybase) with
+fine grained expression of trust links. This graph is is a generalization of
+the DNS or SSL PKI trust hierarchy in the sense that no particular topology is
+enforced. Moreover the root of trust is always self, ie one is free to trust
+whoever he wants and noone is trust by default.
+
+Each entity participating in the system will have two public names: one unique,
+the public part of the master-keypair we'll call *master-key*, one non-unique,
+a string we'll call *nick*. Concretely, an entity can be seen as a database and
+is defined by a partially ordered set of transactions. Additionnaly, every
+entity can maintain a private dictionnary, mapping a *petname* to a unique
+entity (by it's master-key). These 3 namings together (master-keys, nicks and
+petnames) enable to overcome the problem raised by zooko_
+
+
+Transactions
+------------
+
+We define the ancestors of a transaction T as the set of transactions which are
+smaller than T. A transaction contains:
+
+- a class and some data depending on it
+- a signature by the master-key
+
+Besides that, each transaction except the initial one has a set of (hash of)
+parent transactions which must be pairwise incomparable, it is defined to be
+bigger than all of it's parents (and transitively of all their ancestors).
+
+Transaction classes:
+
+``initial``
+   The initial transaction, associated data is the master-key and the nick.
+
+``revoke``
+   Undoes a past transaction, associated data is the hash of the transaction,
+   which must be an ancestor.
+
+``validate``
+   This transaction is the equivalent of keybase's "tracking": the associated
+   data is the hash of a ``claim`` transaction, having no common ancestor with
+   the current one (ie from an other entity). It states that the current entity
+   believes that the given claim is true after having seen a convincing proof.
+
+``claim``
+   See below.
+
+``record``
+   See below.
+
 
 Separation of claims and records
 --------------------------------
 
 A *claim* is a statement of identity, it must be inherently verifiable (or more
 precisely have an absolute truth value). It is composed of 2 parts: a provider
-and an identity, and also optionaly of a proof which is a helper to
+and an identity, and also optionaly a proof-hint which is a helper to
 automatically verify the claim in case it can be. The *provider* is an entity,
 designated either by its key if it is part of the name system, or by a
 consensual identifier. The *identity* is the name with which the provider
@@ -35,13 +90,43 @@ Some examples:
   private key.
 
 I am not sure how to interpret a claim when the provider is the public key of a
-physical individual (what is the associated identity? how to describe it?).
+physical individual also part of this system (what is the associated identity?
+how to describe it? isn't this redundant with the validation statements?).
 
-A *record* is a arbitrary blob of data we are associating with the account. It
-can be interesting to make a record containing a pair of a string and a public
-key (identifying an account), allowing to recreate the hierarchical dot-naming
-of classical DNS: if account ``A`` has a record ``foo => keyB`` then account
-``B`` can be designated by ``foo.A``.
+A *record* is an arbitrary blob of data associated with the account. This can
+be seen as the equivalent of DNS RRs. I am still thinking about the format,
+CBOR_ might be a good candidate. 
+
+TODO: this is WIP
+- mapping a string to a public key: this can be used to mark friends or
+  sub-accounts with a public name that can be used to designate them by the
+  path: if account ``A`` has a record ``foo => B`` then account ``B`` can be
+  designated by ``foo.A``
+- something like a classical DNS RR (mapping a name to a type, ttl and data)
+- 
+
+
+Questions
+=========
+
+Some things i still havent settled on a opinion.
+
+Is it a good idea to specify the protocol down to the same level as keybase: an
+account is just some structured data and enforcing the representation by a DAG
+of transactions could be burdensome in some ways (does it scale well with old
+accounts?..). Maybe a way out: add a new transaction that is compressing the
+history into a flat state at a given point, allowing future transactions to be
+checked for sanity either against the full (original) transactions or
+equivalently against this one.
+
+Shouldn't validation be not only against a particular transaction but against a
+flat-state (ie a transaction and all of it's ancestors)? It could be burdensome
+to generate a validation for every claim we checked, but validation of a state
+is more coarse-grained (we should be able to exclude some claims we don't
+validate)... One simple answer would be to allow validation transaction to
+include as data an arbitrary set of (compatible, this is the complication:
+where no claim in the set has as ancestor the revocation of a claim of this
+set) claims by one entity.
 
 
 Problem of the master keys
@@ -60,3 +145,5 @@ ACLs (i would like to leave the system as simple as possible):
 
 .. _keybase: https://keybase.io
 .. _petname: http://www.skyhunter.com/marcs/petnames/IntroPetNames.html
+.. _CBOR: http://cbor.io/
+.. _zooko: https://web.archive.org/web/20120204172516/http://zooko.com/distnames.html
