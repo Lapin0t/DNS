@@ -9,7 +9,7 @@ system and possibly some other projects.
 
 The goal here is to replace the current DNS system used to attribute global
 names to computers on the internet, but doing it in a cryptographically
-authentificated way it will also replace the current hierarchical SSL PKI and
+authentificated way it will also replace the current hierarchical TLS PKI and
 will provide some basis to build an name system not only for computers but also
 for humans. It does not seek to be compatible with anything, but care is taken
 to allow it to exist alongside current systems (it can also obviously exist by
@@ -22,7 +22,7 @@ Concepts
 
 The main idea is to create a distributed PKI (like the PGP WoT or keybase) with
 fine grained expression of trust links. This graph is is a generalization of
-the DNS or SSL PKI trust hierarchy in the sense that no particular topology is
+the DNS or TLS PKI trust hierarchy in the sense that no particular topology is
 enforced. Moreover the root of trust is always self, ie one is free to trust
 whoever he wants and noone is trust by default.
 
@@ -32,7 +32,8 @@ a string we'll call *nick*. Concretely, an entity can be seen as a database and
 is defined by a partially ordered set of transactions. Additionnaly, every
 entity can maintain a private dictionnary, mapping a *petname* to a unique
 entity (by it's master-key). These 3 namings together (master-keys, nicks and
-petnames) enable to overcome the problem raised by zooko_
+petnames) enable to overcome the problem raised by zooko_ (see also `this
+<stiegler_>`_ for more informations on petnames).
 
 
 Transactions
@@ -97,19 +98,36 @@ A *record* is an arbitrary blob of data associated with the account. This can
 be seen as the equivalent of DNS RRs. I am still thinking about the format,
 CBOR_ might be a good candidate. 
 
-TODO: this is WIP
-- mapping a string to a public key: this can be used to mark friends or
-  sub-accounts with a public name that can be used to designate them by the
-  path: if account ``A`` has a record ``foo => B`` then account ``B`` can be
-  designated by ``foo.A``
-- something like a classical DNS RR (mapping a name to a type, ttl and data)
-- 
+
+Records, or how to express the current DNS and TLS-PKI features
+---------------------------------------------------------------
+
+Basically, everything happens as if every account is a DNS root. Their TLD is
+either their public key, but that's cumbersome, or the petname that the user
+attributed to them. This is enough to express simple (leaf) records: TXT-like
+(containing text) or A/AAAA-like (containing an IP adress).
+
+But just like a NS record, one can create a record with the master-key of
+another entity as value: let's assume there are two accounts with master-keys
+``A`` and ``B``, account ``A`` has a record ``"foo" => B``. Now account
+``B`` can also be refered to as ``foo.A``.
+
+So here we have the essence of DNS: domains are paths and we can point names to
+text, an ip or an entity. But because each entity (the equivalent of name
+servers) is first-of-all the bundling of identity claims and cryptographic
+keys, we just have built a certificate infrastructure. Recall that a
+certificate is just 3 things: an identity (eg public-key and some legal infos),
+a claim (eg domain name) and a proof (eg signature of a trusted third-party).
+Thus, each domain is self-certifying and an the communication with the target
+of a domain should be negociated using the public key of the last entity in the
+chain (no need for X.509 certificates to initiate the TLS handshake because the
+relevant key is already known).
 
 
 Questions
 =========
 
-Some things i still havent settled on a opinion.
+Some things i still havent settled on a opinion:
 
 Is it a good idea to specify the protocol down to the same level as keybase: an
 account is just some structured data and enforcing the representation by a DAG
@@ -147,3 +165,4 @@ ACLs (i would like to leave the system as simple as possible):
 .. _petname: http://www.skyhunter.com/marcs/petnames/IntroPetNames.html
 .. _CBOR: http://cbor.io/
 .. _zooko: https://web.archive.org/web/20120204172516/http://zooko.com/distnames.html
+.. _stiegler: http://www.skyhunter.com/marcs/petnames/IntroPetNames.html
